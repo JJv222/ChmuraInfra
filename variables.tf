@@ -16,14 +16,6 @@ variable "public_subnets"  { type = list(string) }
 variable "private_subnet" { type = string }
 
 # Fargate variables
-variable "frontend_image" {
-  type        = string
-}
-
-variable "backend_image" {
-  type        = string
-}
-
 variable "frontend_port" {
   type        = number
 }
@@ -54,6 +46,10 @@ variable "db_username" {
 variable "db_password" {
   type        = string
   sensitive   = true
+}
+variable "db_port" {
+  type        = number
+  default     = 5432
 }
 
 variable "ecs_task_execution_role_arn" {
