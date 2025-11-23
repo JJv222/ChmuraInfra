@@ -14,8 +14,8 @@ variable "db_username" {
 variable "db_password" {
   type = string
 }
-variable "private_subnet_id" {
-  type = string
+variable "private_subnets_ids" {
+  type = list(string)
 }
 variable "security_group_id" {
   type = string

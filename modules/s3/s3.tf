@@ -1,5 +1,6 @@
-resource "aws_s3_bucket" "b" {
-  bucket = "${var.project_name}-bucket-JA263855"
+
+resource "aws_s3_bucket" "bucket" {
+  bucket = "${lower(var.project_name)}-bucket-ja263855"
 
   tags = {
     Name        = "${var.project_name}-s3-bucket"

@@ -1,6 +1,6 @@
 resource "aws_db_instance" "default" {
   allocated_storage    = var.db_allocated_storage
-  db_name              = "${var.project_name}-db"
+  db_name              = "${var.project_name}"
   engine               = "postgres"
   engine_version       = "14"
   instance_class       = "db.t3.micro"
@@ -8,7 +8,7 @@ resource "aws_db_instance" "default" {
   password             = var.db_password
   db_subnet_group_name = aws_db_subnet_group.postgres.name
   skip_final_snapshot  = true
-  vpc_security_group_ids = [ security_group_id ]
+  vpc_security_group_ids = [ var.security_group_id ]
   port = var.db_port
 
   tags = {
@@ -18,7 +18,7 @@ resource "aws_db_instance" "default" {
 
 resource "aws_db_subnet_group" "postgres" {
   name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = [var.private_subnet_id]
+  subnet_ids = var.private_subnets_ids
 
   tags = {
     Name = "${var.project_name}-db-subnet-group"

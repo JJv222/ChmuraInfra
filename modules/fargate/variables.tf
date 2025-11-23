@@ -18,14 +18,17 @@ variable "s3_name" {
   description = "Nazwa istniejącego bucketu S3 do przechowywania plików statycznych frontend"
 }
 
-variable "private_subnet_id" {
-  type        = string
-  description = "ID prywatnej podsieci dla zadań Backend Fargate"
-}
-
 variable "connection_string" {
   type        = string
   description = "Łańcuch połączenia do bazy danych RDS PostgreSQL"
+}
+variable "db_username" {
+  type        = string
+  description = "Nazwa użytkownika bazy danych RDS PostgreSQL"
+}
+variable "db_password" {
+  type        = string
+  description = "Hasło użytkownika bazy danych RDS PostgreSQL"
 }
 
 variable "frontend_image" {
@@ -46,6 +49,32 @@ variable "frontend_port" {
 variable "backend_port" {
   type        = number
   description = "Port na którym nasłuchuje backend"
+}
+
+variable "frontend_tg_arn" {
+  type        = string
+  description = "ARN TG dla frontend"
+}
+
+variable "backend_tg_arn" {
+  type        = string
+  description = "ARN TG dla backend"
+}
+
+variable "backend_sg_id" {
+  type        = string
+  description = "SG dla backend tasków"
+}
+
+
+variable "backend_url" {
+  type        = string
+  description = "URL dostępu do backendu (np. http://backend-alb-dns-name:backend_port/api)"
+}
+
+variable "frontend_sg_id"{
+  type        = string
+  description = "ID security group dla frontend Fargate"
 }
 
 # RDS variables dla backendu

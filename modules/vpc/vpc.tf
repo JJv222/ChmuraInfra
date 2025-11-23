@@ -22,10 +22,11 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_subnet" "private" {
+  count                   = length(var.private_subnets)
   vpc_id                  = aws_vpc.this.id
-  cidr_block              = var.private_subnet
-  availability_zone       = var.backend_availability_zone
-  tags = { Name = "${var.project_name}-private-subnet" }
+  cidr_block              = var.private_subnets[count.index]
+  availability_zone       = var.private_availability_zones[count.index]
+  tags = { Name = "${var.project_name}-private-subnet-${var.private_availability_zones[count.index]}" }
 }
 
 # Public Route Table
@@ -57,6 +58,7 @@ resource "aws_route_table_association" "frontend" {
 }
 
 resource "aws_route_table_association" "backend" {
-  subnet_id      = aws_subnet.private.id
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private_route_table.id
 }

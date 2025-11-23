@@ -1,49 +1,66 @@
 resource "aws_lb" "alb" {
-  name               =  "${var.project_name}-alb"
+  name               = "${var.project_name}-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = var.security_groups
-  subnets            = var.alb_subnets
+  security_groups    = var.frontend_security_groups
+  subnets            = var.frontend_alb_subnets
 
   tags = {
-    Environment = "alb"
+    Environment = "public-alb"
   }
 }
 
-resource "aws_lb_target_group" "alb_tg" {
-  name     = "${var.project_name}-frontend-alb-tg"
-  port     = var.frontend_port
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+# TG dla frontu
+resource "aws_lb_target_group" "frontend_tg" {
+  name        = "${var.project_name}-frontend-tg"
+  port        = var.frontend_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+  
+  health_check {
+    path    = "/"
+    matcher = "200-399"
+  }
 }
 
+# TG dla backendu
+resource "aws_lb_target_group" "backend_tg" {
+  name        = "${var.project_name}-backend-tg"
+  port        = var.backend_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
 
-resource "aws_lb_listener" "frontend" {
+  health_check {
+    path    = "/api" 
+    matcher = "200-399"
+  }
+}
+
+# Listener publiczny (domyślnie -> front)
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.alb.arn
   port              = var.frontend_port
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.alb_tg.arn
+    target_group_arn = aws_lb_target_group.frontend_tg.arn
   }
 }
 
-resource "aws_lb_target_group" "backend_alb_tg" {
-  name     = "${var.project_name}-backend-alb-tg"
-  port     = var.backend_port
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
-}
+# Rule: /api/* -> backend
+resource "aws_lb_listener_rule" "api" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 10
 
-resource "aws_lb_listener" "backend" {
-  load_balancer_arn = aws_lb.alb.arn
-  port              = var.backend_port
-  protocol          = "HTTP"
+  condition {
+    path_pattern { values = ["/api/*"] }
+  }
 
-  default_action {
+  action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.backend_alb_tg.arn
+    target_group_arn = aws_lb_target_group.backend_tg.arn
   }
 }
-

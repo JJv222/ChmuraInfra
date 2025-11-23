@@ -1,5 +1,5 @@
 # Security Group dla Load Balancera
-
+data "aws_region" "current" {}
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-cluster"
@@ -29,13 +29,17 @@ resource "aws_ecs_task_definition" "frontend" {
   family                   = "${var.project_name}-frontend"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = var.ecs_task_execution_role_arn
+  task_role_arn             = var.ecs_task_execution_role_arn
 
   container_definitions = jsonencode([
     {
       name      = "frontend"
       image     = var.frontend_image
       essential = true
+      memory    = 512
       portMappings = [
         {
           containerPort = var.frontend_port
@@ -43,6 +47,20 @@ resource "aws_ecs_task_definition" "frontend" {
           protocol      = "tcp"
         }
       ]
+      environment = [
+        {
+          name  = "API_BASE_URL"
+          value = var.backend_url
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.frontend_log_group.name
+          "awslogs-stream-prefix" = "frontend"
+          "awslogs-region"        = data.aws_region.current.name
+        }
+      }
     }
   ])
 
@@ -56,13 +74,17 @@ resource "aws_ecs_task_definition" "backend" {
   family                   = "${var.project_name}-backend"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = var.ecs_task_execution_role_arn
+  task_role_arn             = var.ecs_task_execution_role_arn
 
   container_definitions = jsonencode([
     {
       name      = "backend"
       image     = var.backend_image
       essential = true
+      memory    = 512
       portMappings = [
         {
           containerPort = var.backend_port
@@ -71,27 +93,18 @@ resource "aws_ecs_task_definition" "backend" {
         }
       ]
       environment = [
-        {
-          name  = "DB_HOST"
-          value = moduel.rds.db_host
-        },
-        {
-          name  = "DB_PORT"
-          value = moduel.rds.db_port
-        },
-        {
-          name  = "DB_NAME"
-          value = moduel.rds.db_name
-        },
-        {
-          name  = "DB_USER"
-          value = moduel.rds.db_username
-        },
-        {
-          name  = "DB_PASSWORD"
-          value = moduel.rds.db_password
-        }
+        { name = "SPRING_DATASOURCE_URL",      value = var.connection_string },
+        { name = "SPRING_DATASOURCE_USERNAME", value = var.db_username },
+        { name = "SPRING_DATASOURCE_PASSWORD", value = var.db_password }
       ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.backend_log_group.name
+          "awslogs-stream-prefix" = "backend"
+          "awslogs-region"        = data.aws_region.current.name
+        }
+      }
     }
   ])
 
@@ -110,19 +123,16 @@ resource "aws_ecs_service" "frontend" {
 
   network_configuration {
     subnets          = var.public_subnet_ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
+    security_groups = [var.frontend_sg_id]
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.frontend.arn
+    target_group_arn = var.frontend_tg_arn
     container_name   = "frontend"
     container_port   = var.frontend_port
   }
 
-  depends_on = [
-    aws_lb_listener.main
-  ]
 
   tags = {
     Name = "${var.project_name}-frontend-service"
@@ -136,24 +146,33 @@ resource "aws_ecs_service" "backend" {
   task_definition = aws_ecs_task_definition.backend.arn
   desired_count   = 1
   launch_type     = "FARGATE"
+  force_new_deployment = true
 
   network_configuration {
     subnets          = var.public_subnet_ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
+    security_groups = [var.backend_sg_id]
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.backend.arn
+    target_group_arn = var.backend_tg_arn   
     container_name   = "backend"
     container_port   = var.backend_port
   }
 
-  depends_on = [
-    aws_lb_listener_rule.api
-  ]
 
   tags = {
     Name = "${var.project_name}-backend-service"
   }
+}
+
+###LOGI
+resource "aws_cloudwatch_log_group" "frontend_log_group" {
+  name              = "/ecs/frontend"
+  retention_in_days = 7 
+}
+
+resource "aws_cloudwatch_log_group" "backend_log_group" {
+  name              = "/ecs/backend"
+  retention_in_days = 7
 }

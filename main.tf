@@ -1,64 +1,89 @@
+############################
+# MODULES
+############################
+
 module "vpc" {
-  source          = "./modules/vpc"
-  project_name    = var.project_name
-  vpc_cidr        = var.vpc_cidr
-  public_availability_zones = var.availability_zones
-  backend_availability_zone = public_availability_zones[0]
-  public_subnets =   var.public_subnets
-  private_subnet  = var.private_subnet
+  source                     = "./modules/vpc"
+  project_name               = var.project_name
+  vpc_cidr                   = var.vpc_cidr
+
+  public_availability_zones  = var.availability_zones
+  backend_availability_zone  = var.availability_zones[0]
+
+  public_subnets             = var.public_subnets
+  private_subnets            = var.private_subnets
+  private_availability_zones = var.availability_zones
 }
 
 module "alb" {
-  source = "./modules/alb"
-  project_name = var.project_name
-  vpc_id = module.vpc.vpc_id
-  frontend_port = var.frontend_port
-  backend_port = var.backend_port
-  alb_subnets = module.vpc.public_subnets
-  security_groups = [aws_security_group.frontend_alb.id, aws_security_group.backend_alb.id]
+  source                   = "./modules/alb"
+  project_name             = var.project_name
+  vpc_id                   = module.vpc.vpc_id
+
+  frontend_port            = var.frontend_port     # najlepiej 80
+  backend_port             = var.backend_port      # np. 8080
+
+  frontend_alb_subnets     = module.vpc.public_subnets
+  frontend_security_groups = [aws_security_group.frontend_alb.id]
+  # backend ALB już NIE MA
 }
 
-
 module "ecr" {
-  source = "./modules/ecr"
+  source       = "./modules/ecr"
   project_name = var.project_name
 }
 
 module "s3" {
-  source = "./modules/s3"
-  project_name = var.project_name
+  source       = "./modules/s3"
+  project_name = "simple-notatnik-bucket-ja263855"
 }
 
 module "rds" {
-  source              = "./modules/rds"
-  project_name        = var.project_name
-  vpc_id              = module.vpc.vpc_id
-  private_subnet_id  = module.private_subnet
-  security_group_id  =  aws_security_group.rds_access.id
-  db_username         = var.db_username
-  db_password         = var.db_password
-  db_port             =  var.db_port
+  source               = "./modules/rds"
+  project_name         = var.project_name
+  vpc_id               = module.vpc.vpc_id
+  private_subnets_ids  = module.vpc.private_subnets
+  security_group_id    = aws_security_group.rds_access.id
+  db_username          = var.db_username
+  db_password          = var.db_password
+  db_port              = var.db_port
 }
-
 
 module "fargate" {
-  source = "./modules/fargate"
-  project_name = var.project_name
-  vpc_id = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnets
-  private_subnet_id = module.vpc.private_subnet
-  s3_name = module.s3.bucket_name
-  connection_string = module.rds.connection_string
-  frontend_image = module.ecr.fronted_repository_url
-  backend_image = module.ecr.backend_repository_url
-  frontend_port = var.frontend_port
-  backend_port = var.backend_port
+  source                      = "./modules/fargate"
+  project_name                = var.project_name
+  vpc_id                      = module.vpc.vpc_id
+  public_subnet_ids           = module.vpc.public_subnets
+
+  # jeśli u Ciebie output nazywa się inaczej niż bucket_name → podmień
+  s3_name                     = module.s3.bucket_name
+
+  connection_string           = module.rds.jdbc_url
+  db_username                 = var.db_username
+  db_password                 = var.db_password
+
+  # DODAJ TAGI obrazów w tfvars / modułach!
+  frontend_image              = module.ecr.fronted_repository_url
+  backend_image               = module.ecr.backend_repository_url
+
+  frontend_port               = var.frontend_port
+  backend_port                = var.backend_port
+
   ecs_task_execution_role_arn = var.ecs_task_execution_role_arn
+
+  frontend_tg_arn             = module.alb.frontend_tg_arn
+  backend_tg_arn              = module.alb.backend_tg_arn
+
+  # przy 1 ALB najlepsze:
+  backend_url                 = "/api"
+
+  frontend_sg_id              = aws_security_group.frontend_fargate.id
+  backend_sg_id               = aws_security_group.backend_fargate.id
 }
 
-
-
-# Security Groups for Fargate and RDS
+############################
+# SECURITY GROUPS
+############################
 
 # =======================
 # PUBLIC FRONTEND ALB SG
@@ -69,19 +94,19 @@ resource "aws_security_group" "frontend_alb" {
   vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description = "Internet -> Frontend ALB "
-    from_port   = var.frontend_port
+    description = "Internet do ALB"
+    from_port   = var.frontend_port   # najlepiej 80
     to_port     = var.frontend_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
-    description     = "Frontend ALB -> Frontend Fargate"
-    from_port       = var.frontend_port
-    to_port         = var.frontend_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.frontend_fargate.id]
+    description = "ALB to targets"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
@@ -94,7 +119,7 @@ resource "aws_security_group" "frontend_fargate" {
   vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description     = "Frontend ALB -> Frontend tasks"
+    description     = "ALB do frontend tasks"
     from_port       = var.frontend_port
     to_port         = var.frontend_port
     protocol        = "tcp"
@@ -102,36 +127,11 @@ resource "aws_security_group" "frontend_fargate" {
   }
 
   egress {
-    description = "Frontend -> Internet (or Backend ALB)"
+    description = "Frontend do Internet/Backend"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# ======================
-# INTERNAL BACKEND ALB SG
-# ======================
-resource "aws_security_group" "backend_alb" {
-  name        = "backend_alb_sg"
-  description = "Internal ALB for backend"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    description     = "Frontend tasks -> Backend ALB"
-    from_port       = var.backend_port
-    to_port         = var.backend_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.frontend_fargate.id]
-  }
-
-  egress {
-    description     = "Backend ALB -> Backend tasks"
-    from_port       = var.backend_port
-    to_port         = var.backend_port 
-    protocol        = "tcp"
-    security_groups = [aws_security_group.backend_fargate.id]
   }
 }
 
@@ -140,27 +140,19 @@ resource "aws_security_group" "backend_alb" {
 # ====================
 resource "aws_security_group" "backend_fargate" {
   name        = "backend_fargate_sg"
-  description = "Backend tasks"
+  description = "Backend tasks - only ALB can reach"
   vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description     = "Backend ALB -> Backend tasks"
+    description     = "ALB do backend tasks (/api)"
     from_port       = var.backend_port
     to_port         = var.backend_port
     protocol        = "tcp"
-    security_groups = [aws_security_group.backend_alb.id]
+    security_groups = [aws_security_group.frontend_alb.id]
   }
 
   egress {
-    description     = "Backend tasks -> RDS"
-    from_port       = var.db_port
-    to_port         = var.db_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds_access.id]
-  }
-
-  egress {
-    description = "Backend -> Internet (ECR, external APIs)"
+    description = "Backend do Internet (ECR etc.) + RDS"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -173,11 +165,11 @@ resource "aws_security_group" "backend_fargate" {
 # =============
 resource "aws_security_group" "rds_access" {
   name        = "${var.project_name}-rds-access-sg"
-  description = "Allows Backend tasks to access RDS"
+  description = "Allows backend tasks to access RDS"
   vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description     = "Backend tasks -> RDS (5432)"
+    description     = "Backend tasks do RDS"
     from_port       = var.db_port
     to_port         = var.db_port
     protocol        = "tcp"
@@ -185,7 +177,7 @@ resource "aws_security_group" "rds_access" {
   }
 
   egress {
-    description = "RDS outbound (default allow-all)"
+    description = "RDS outbound allow-all"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

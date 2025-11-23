@@ -15,12 +15,13 @@ variable "backend_port" {
     description = "Port na którym ALB będzie nasłuchiwać ruch dla backendu"
 }
 
-variable "alb_subnets" {
+variable "frontend_alb_subnets" {
     type        = list(string)
     description = "Lista ID podsieci, w których zostanie utworzony ALB"
 }
 
-variable "security_groups" {
+
+variable "frontend_security_groups" {
     type        = list(string)
-    description = "Lista ID grup bezpieczeństwa przypisanych do ALB"
+    description = "Lista ID security group dla frontendu ALB"
 }

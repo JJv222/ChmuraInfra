@@ -13,7 +13,7 @@ variable "project_name" {
 
 variable "vpc_cidr"        { type = string }
 variable "public_subnets"  { type = list(string) }
-variable "private_subnet" { type = string }
+variable "private_subnets" { type = list(string) }
 
 # Fargate variables
 variable "frontend_port" {
