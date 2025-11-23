@@ -81,6 +81,20 @@ module "fargate" {
   backend_sg_id               = aws_security_group.backend_fargate.id
 }
 
+module "myLambda" {
+  source       = "./modules/myLambda"
+  project_name = "notatnik" 
+  bucket_name  = module.s3.bucket_name
+
+  # folder z lambda_function.py
+  source_dir   = "./modules/myLambda/code"
+  role_arn = var.ecs_task_execution_role_arn
+  # opcjonalnie: tylko pliki z uploads/ i tylko jpg/png
+  # filter_prefix = "uploads/"
+  # filter_suffix = ".png"
+}
+
+
 ############################
 # SECURITY GROUPS
 ############################
