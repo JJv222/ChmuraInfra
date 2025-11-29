@@ -95,7 +95,9 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         { name = "SPRING_DATASOURCE_URL",      value = var.connection_string },
         { name = "SPRING_DATASOURCE_USERNAME", value = var.db_username },
-        { name = "SPRING_DATASOURCE_PASSWORD", value = var.db_password }
+        { name = "SPRING_DATASOURCE_PASSWORD", value = var.db_password },
+        { name = "AWS.S3.BUCKET", value = var.s3_name},
+        { name = "AWS.S3.PREFIX", value = "notepadApp"} //same as in lambda_function.py file
       ]
       logConfiguration = {
         logDriver = "awslogs"

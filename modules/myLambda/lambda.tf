@@ -79,10 +79,6 @@ resource "aws_s3_bucket_notification" "this" {
   lambda_function {
     lambda_function_arn = aws_lambda_function.this.arn
     events              = ["s3:ObjectCreated:*"]
-
-    # filtry są opcjonalne
-    filter_prefix       = var.filter_prefix != "" ? var.filter_prefix : null
-    filter_suffix       = var.filter_suffix != "" ? var.filter_suffix : null
   }
 
   depends_on = [aws_lambda_permission.allow_s3]
